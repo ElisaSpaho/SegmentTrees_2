@@ -1,0 +1,21 @@
+# IntelliJ
+.idea/
+
+# VS Code
+.vscode/
+
+# Build folders
+out/
+target/
+build/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Java compiled files
+*.class
+
+# Logs
+*.log
