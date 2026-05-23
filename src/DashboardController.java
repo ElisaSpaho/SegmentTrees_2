@@ -5,29 +5,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
-/**
- * DashboardController
- * ─────────────────────────────────────────────────────────────────────────────
- * JavaFX GUI for the Cinema Ticket Sales Tracker.
- *
- * RESPONSIBILITY (GUI = interactive simulation):
- *   Show available tickets per cinema row and let the user query / update
- *   them through simple controls.  The console (Main.java) handles all
- *   deep technical output (tree nodes, lazy arrays, benchmarks).
- *
- * DEFAULT VIEW:
- *   Plain white, no styling.  Shows "Row X → Y tickets" for every row.
- *
- * OPTIONAL ADVANCED VIEW (via checkboxes):
- *   [ ] Show Internal Tree Structure  → displays getTreeArray()
- *   [ ] Show Lazy Propagation State   → displays non-zero getLazyArray() entries
- *
- * OPERATIONS:
- *   • Range Query  — sum tickets across a row range
- *   • Point Update — set ticket count for one row
- *   • Range Update — add a delta to every row in a range (lazy propagation)
- *   • Benchmark    — runs Benchmark.runAll() on a background thread
- */
 public class DashboardController {
 
     private static final long[] INITIAL = {10, 15, 8, 22, 5, 12, 19, 7};
@@ -40,8 +17,6 @@ public class DashboardController {
     private TextField pv, rv;
 
     private CheckBox showTree, showLazy;
-
-    // ─────────────────────────────────────────────────────────────
 
     public Scene buildScene() {
 
@@ -74,14 +49,9 @@ public class DashboardController {
         refresh();
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
-        //scroll.setFitToHeight(true);
 
         return new Scene(scroll, 750, 680);
     }
-
-    // ─────────────────────────────────────────────────────────────
-    // UI SECTIONS
-    // ─────────────────────────────────────────────────────────────
 
     private Label title() {
         Label l = new Label("Cinema Ticket Tracker");
@@ -182,7 +152,6 @@ public class DashboardController {
 
     }
 
-     // NEW — prints tree structure and lazy state to the console
     private VBox printTreeSection() {
         Button b = new Button("Print Tree");
         b.setOnAction(e -> {
@@ -215,10 +184,6 @@ public class DashboardController {
 
         return new VBox(b, status);
     }
-
-    // ─────────────────────────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────────────────────────
 
     private void refresh() {
         refreshRows();
@@ -261,10 +226,6 @@ public class DashboardController {
         advanced.setManaged(show);
         if (show) refreshAdvanced();
     }
-
-    // ─────────────────────────────────────────────────────────────
-    // SMALL FACTORY HELPERS
-    // ─────────────────────────────────────────────────────────────
 
     private ComboBox<Integer> boxIndex() {
         ComboBox<Integer> c = new ComboBox<>();

@@ -6,8 +6,6 @@ public class Visualizer {
     private static final String YELLOW = "\u001B[33m";
     private static final String BLUE   = "\u001B[34m";
 
-    // ── 1. Tree Structure Display ─────────────────────────────────────────────
-    // Called by the GUI "Print Tree" button via DashboardController.
 
     public static void printTree(long[] treeArr, int n, String label) {
         System.out.println("\n" + BOLD + YELLOW + label + RESET);
