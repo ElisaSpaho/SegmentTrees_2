@@ -30,352 +30,255 @@ import javafx.scene.layout.*;
  */
 public class DashboardController {
 
-    // ── Data ─────────────────────────────────────────────────────────────────
+    private static final long[] INITIAL = {10, 15, 8, 22, 5, 12, 19, 7};
+    private final LazySegmentTree tree = new LazySegmentTree(INITIAL);
 
-    /** Starting ticket counts for 8 cinema rows. */
-    private static final long[] INITIAL_TICKETS = {10, 15, 8, 22, 5, 12, 19, 7};
+    private TextArea rows, advanced;
+    private Label result, opsLabel;
 
-    /** The single shared tree instance used by all GUI operations. */
-    private final LazySegmentTree segmentTree = new LazySegmentTree(INITIAL_TICKETS);
+    private ComboBox<Integer> ql, qr, pl, rl, rr;
+    private TextField pv, rv;
 
-    // ── Controls referenced by handlers ──────────────────────────────────────
+    private CheckBox showTree, showLazy;
 
-    private TextArea rowDisplay;          // main "Row X → Y tickets" display
-    private TextArea advancedDisplay;     // tree / lazy internals (hidden by default)
+    // ─────────────────────────────────────────────────────────────
 
-    private Label    resultLabel;         // shows last query or update result
-    private Label    opCountLabel;        // "Operations Count: X"
-
-    private ComboBox<Integer> queryStartBox;
-    private ComboBox<Integer> queryEndBox;
-
-    private ComboBox<Integer> pointRowBox;
-    private TextField         pointValueField;
-
-    private ComboBox<Integer> rangeStartBox;
-    private ComboBox<Integer> rangeEndBox;
-    private TextField         rangeDeltaField;
-
-    private CheckBox showTreeCheckBox;
-    private CheckBox showLazyCheckBox;
-
-    // ── Scene builder ─────────────────────────────────────────────────────────
-
-    /**
-     * Build and return the complete Scene.
-     * Called once by RangeIntelligenceApp.start().
-     */
     public Scene buildScene() {
 
         VBox root = new VBox(10);
         root.setPadding(new Insets(15));
-        // Plain white background — no colour styling
         root.setStyle("-fx-background-color: white;");
 
-        // ── Title ─────────────────────────────────────────────────────────────
-        Label title = new Label("Cinema Ticket Sales Tracker");
-        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
-
-        Label subtitle = new Label("Each row represents available tickets in a cinema row.");
-        subtitle.setStyle("-fx-font-size: 11px;");
-
-        root.getChildren().addAll(title, subtitle, new Separator());
-
-        // ── Row display ───────────────────────────────────────────────────────
-        Label rowHeading = new Label("Current Ticket Availability:");
-        rowHeading.setStyle("-fx-font-weight: bold;");
-
-        rowDisplay = new TextArea();
-        rowDisplay.setEditable(false);
-        rowDisplay.setPrefHeight(160);
-        rowDisplay.setStyle("-fx-font-family: 'Courier New'; -fx-font-size: 12px;");
-
-        root.getChildren().addAll(rowHeading, rowDisplay, new Separator());
-
-        // ── Operation counter ─────────────────────────────────────────────────
-        opCountLabel = new Label("Operations Count: 0");
-
-        Button resetCounterBtn = new Button("Reset Counter");
-        resetCounterBtn.setOnAction(e -> {
-            OperationCounter.reset();
-            opCountLabel.setText("Operations Count: 0");
-        });
-
-        HBox counterRow = new HBox(10, opCountLabel, resetCounterBtn);
-        counterRow.setAlignment(Pos.CENTER_LEFT);
-        root.getChildren().addAll(counterRow, new Separator());
-
-        // ── Range query ───────────────────────────────────────────────────────
-        Label queryHeading = new Label("Range Sum Query:");
-        queryHeading.setStyle("-fx-font-weight: bold;");
-
-        queryStartBox = makeIndexCombo();
-        queryEndBox   = makeIndexCombo();
-        queryEndBox.setValue(7);
-
-        Button queryBtn = new Button("Calculate Total Tickets");
-        queryBtn.setOnAction(e -> handleRangeQuery());
-
-        HBox queryRow = new HBox(8,
-                new Label("From Row:"), queryStartBox,
-                new Label("To Row:"),   queryEndBox,
-                queryBtn);
-        queryRow.setAlignment(Pos.CENTER_LEFT);
-
-        root.getChildren().addAll(queryHeading, queryRow, new Separator());
-
-        // ── Point update ──────────────────────────────────────────────────────
-        Label pointHeading = new Label("Point Update  (set one row):");
-        pointHeading.setStyle("-fx-font-weight: bold;");
-
-        pointRowBox    = makeIndexCombo();
-        pointValueField = new TextField("10");
-        pointValueField.setPrefWidth(60);
-
-        Button pointBtn = new Button("Update Ticket Count");
-        pointBtn.setOnAction(e -> handlePointUpdate());
-
-        HBox pointRow = new HBox(8,
-                new Label("Row:"),       pointRowBox,
-                new Label("New Count:"), pointValueField,
-                pointBtn);
-        pointRow.setAlignment(Pos.CENTER_LEFT);
-
-        root.getChildren().addAll(pointHeading, pointRow, new Separator());
-
-        // ── Range update (lazy propagation) ───────────────────────────────────
-        Label rangeHeading = new Label("Range Update  (add to a range, uses lazy propagation):");
-        rangeHeading.setStyle("-fx-font-weight: bold;");
-
-        rangeStartBox   = makeIndexCombo();
-        rangeEndBox     = makeIndexCombo();
-        rangeEndBox.setValue(7);
-        rangeDeltaField = new TextField("5");
-        rangeDeltaField.setPrefWidth(60);
-
-        Button rangeBtn = new Button("Apply Range Update");
-        rangeBtn.setOnAction(e -> handleRangeUpdate());
-
-        HBox rangeRow = new HBox(8,
-                new Label("From:"), rangeStartBox,
-                new Label("To:"),   rangeEndBox,
-                new Label("Add:"),  rangeDeltaField,
-                rangeBtn);
-        rangeRow.setAlignment(Pos.CENTER_LEFT);
-
-        root.getChildren().addAll(rangeHeading, rangeRow, new Separator());
-
-        // ── Result label ──────────────────────────────────────────────────────
-        resultLabel = new Label("Select an operation above.");
-        resultLabel.setStyle("-fx-font-size: 12px;");
-        resultLabel.setWrapText(true);
-        root.getChildren().addAll(resultLabel, new Separator());
-
-        // ── Advanced view checkboxes ──────────────────────────────────────────
-        Label advancedHeading = new Label("Advanced View (optional):");
-        advancedHeading.setStyle("-fx-font-weight: bold;");
-
-        showTreeCheckBox = new CheckBox("Show Internal Tree Structure");
-        showLazyCheckBox = new CheckBox("Show Lazy Propagation State");
-
-        showTreeCheckBox.selectedProperty().addListener((obs, old, selected) -> refreshAdvancedDisplay());
-        showLazyCheckBox.selectedProperty().addListener((obs, old, selected) -> refreshAdvancedDisplay());
-
-        advancedDisplay = new TextArea();
-        advancedDisplay.setEditable(false);
-        advancedDisplay.setPrefHeight(130);
-        advancedDisplay.setStyle("-fx-font-family: 'Courier New'; -fx-font-size: 11px;");
-        advancedDisplay.setVisible(false);
-        advancedDisplay.setManaged(false);
-
-        // Show the advancedDisplay area whenever at least one checkbox is ticked
-        showTreeCheckBox.selectedProperty().addListener((obs, old, v) -> syncAdvancedVisibility());
-        showLazyCheckBox.selectedProperty().addListener((obs, old, v) -> syncAdvancedVisibility());
-
         root.getChildren().addAll(
-                advancedHeading,
-                new HBox(15, showTreeCheckBox, showLazyCheckBox),
-                advancedDisplay,
-                new Separator());
+                title(),
+                new Separator(),
+                rowSection(),
+                new Separator(),
+                opsSection(),
+                new Separator(),
+                querySection(),
+                new Separator(),
+                pointSection(),
+                new Separator(),
+                rangeSection(),
+                new Separator(),
+                resultSection(),
+                new Separator(),
+                advancedSection(),
+                new Separator(),
+                benchmarkSection()
+        );
 
-        // ── Benchmark ─────────────────────────────────────────────────────────
-        Label benchmarkHeading = new Label("Performance Benchmark:");
-        benchmarkHeading.setStyle("-fx-font-weight: bold;");
-
-        Label benchmarkNote = new Label("Full results are printed to the console.");
-        benchmarkNote.setStyle("-fx-font-size: 11px;");
-
-        Label benchmarkStatusLabel = new Label("");
-
-        Button benchmarkBtn = new Button("Run Performance Benchmark");
-        benchmarkBtn.setOnAction(e -> {
-            benchmarkBtn.setDisable(true);
-            benchmarkStatusLabel.setText("Running… check console for output.");
-            Thread t = new Thread(() -> {
-                Benchmark.runAll();
-                Platform.runLater(() -> {
-                    benchmarkStatusLabel.setText("Benchmark completed. Check console output.");
-                    benchmarkBtn.setDisable(false);
-                });
-            });
-            t.setDaemon(true);
-            t.start();
-        });
-
-        root.getChildren().addAll(benchmarkHeading, benchmarkNote, benchmarkBtn, benchmarkStatusLabel);
-
-        // ── Initial refresh ───────────────────────────────────────────────────
-        refreshRowDisplay();
-
+        refresh();
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background-color: white; -fx-background: white;");
+        //scroll.setFitToHeight(true);
 
         return new Scene(scroll, 750, 680);
     }
 
-    // ── Event handlers ────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // UI SECTIONS
+    // ─────────────────────────────────────────────────────────────
 
-    private void handleRangeQuery() {
-        int l = queryStartBox.getValue();
-        int r = queryEndBox.getValue();
-        if (l > r) {
-            resultLabel.setText("Error: start row must be less than or equal to end row.");
-            return;
-        }
-        long total = segmentTree.rangeQuery(l, r);
-        refreshAfterOperation();
-        resultLabel.setText("Total tickets from Row " + l + " to Row " + r + " = " + total);
-        System.out.println("[GUI] rangeQuery(" + l + ", " + r + ") = " + total
-                + "  [nodes visited: " + OperationCounter.getOperations() + "]");
+    private Label title() {
+        Label l = new Label("Cinema Ticket Tracker");
+        l.setStyle("-fx-font-size:16px;-fx-font-weight:bold;");
+        return l;
     }
 
-    private void handlePointUpdate() {
-        try {
-            int  row   = pointRowBox.getValue();
-            long value = Long.parseLong(pointValueField.getText().trim());
-            if (value < 0) {
-                resultLabel.setText("Error: ticket count cannot be negative.");
-                return;
-            }
-            segmentTree.pointUpdate(row, value);
-            refreshAfterOperation();
-            resultLabel.setText("Row " + row + " updated to " + value + " tickets.");
-            System.out.println("[GUI] pointUpdate(" + row + ", " + value + ")"
-                    + "  [nodes visited: " + OperationCounter.getOperations() + "]");
-        } catch (NumberFormatException ex) {
-            resultLabel.setText("Error: please enter a valid whole number.");
-        }
+    private VBox rowSection() {
+        rows = new TextArea();
+        rows.setEditable(false);
+        rows.setPrefHeight(150);
+        rows.setStyle("-fx-font-family: monospace;");
+
+        refreshRows();
+        return box("Current Ticket Availability", rows);
     }
 
-    private void handleRangeUpdate() {
-        try {
-            int  l     = rangeStartBox.getValue();
-            int  r     = rangeEndBox.getValue();
-            long delta = Long.parseLong(rangeDeltaField.getText().trim());
-            if (l > r) {
-                resultLabel.setText("Error: start row must be less than or equal to end row.");
-                return;
-            }
-            segmentTree.rangeUpdate(l, r, delta);
-            refreshAfterOperation();
-            resultLabel.setText("Added " + delta + " tickets to every row from "
-                    + l + " to " + r + "."
-                    + "  [nodes visited: " + OperationCounter.getOperations() + "]");
-            System.out.println("[GUI] rangeUpdate(" + l + ", " + r + ", " + delta + ")"
-                    + "  [nodes visited: " + OperationCounter.getOperations() + "]");
-        } catch (NumberFormatException ex) {
-            resultLabel.setText("Error: please enter a valid whole number.");
-        }
+    private VBox opsSection() {
+        opsLabel = new Label("Operations: 0");
+
+        Button reset = new Button("Reset");
+        reset.setOnAction(e -> {
+            OperationCounter.reset();
+            refresh();
+        });
+
+        HBox h = new HBox(10, opsLabel, reset);
+        h.setAlignment(Pos.CENTER_LEFT);
+
+        return new VBox(h);
     }
 
-    // ── Refresh helpers ───────────────────────────────────────────────────────
+    private VBox querySection() {
+        ql = boxIndex();
+        qr = boxIndex();
 
-    /**
-     * Call after every tree operation — refreshes the row display,
-     * operation counter, and (if visible) the advanced panel.
-     */
-    private void refreshAfterOperation() {
-        refreshRowDisplay();
-        opCountLabel.setText("Operations Count: " + OperationCounter.getOperations());
-        if (showTreeCheckBox.isSelected() || showLazyCheckBox.isSelected()) {
-            refreshAdvancedDisplay();
-        }
+        Button b = new Button("Query");
+        b.setOnAction(e -> {
+            long res = tree.rangeQuery(ql.getValue(), qr.getValue());
+            result.setText("Number of tickets = " + res);
+            refresh();
+        });
+
+        return row("Range Query/Number of tickets", "From", ql, "To", qr, b);
     }
 
-    /**
-     * Rebuild the plain "Row X → Y tickets" display from the current leaf values.
-     * Uses getOriginalArray() which reflects all updates (point and range).
-     */
-    private void refreshRowDisplay() {
-        long[] values = segmentTree.getOriginalArray();
+    private VBox pointSection() {
+        pl = boxIndex();
+        pv = new TextField("10");
+
+        Button b = new Button("Update");
+        b.setOnAction(e -> {
+            tree.pointUpdate(pl.getValue(), Long.parseLong(pv.getText()));
+            refresh();
+        });
+
+        return row("Point Update/ Update nr of tickets in row", "Row", pl, "Value", pv, b);
+    }
+
+    private VBox rangeSection() {
+        rl = boxIndex();
+        rr = boxIndex();
+        rv = new TextField("5");
+
+        Button b = new Button("Apply");
+        b.setOnAction(e -> {
+            tree.rangeUpdate(rl.getValue(), rr.getValue(),
+                    Long.parseLong(rv.getText()));
+            refresh();
+        });
+
+        return row("Range Update/Add tickets for each row", "From", rl, "To", rr, "Add", rv, b);
+    }
+
+    private VBox resultSection() {
+        result = new Label("Ready");
+        return new VBox(result);
+    }
+
+    private VBox advancedSection() {
+
+        showTree = new CheckBox("Segment Tree");
+        showLazy = new CheckBox("Lazy Segment Tree");
+
+        advanced = new TextArea();
+        advanced.setEditable(false);
+        advanced.setPrefHeight(120);
+        advanced.setVisible(false);
+        advanced.setManaged(false);
+
+        showTree.setOnAction(e -> refreshAdvanced());
+        showLazy.setOnAction(e -> refreshAdvanced());
+
+        VBox box = new VBox(
+                new HBox(10, showTree, showLazy),
+                advanced
+        );
+
+        return box;
+    }
+
+    private VBox benchmarkSection() {
+
+        Button b = new Button("Run Benchmark");
+        Label status = new Label();
+
+        b.setOnAction(e -> {
+            b.setDisable(true);
+            status.setText("Running...");
+
+            new Thread(() -> {
+                Benchmark.runAll();
+                Platform.runLater(() -> {
+                    status.setText("Done (see console)");
+                    b.setDisable(false);
+                });
+            }).start();
+        });
+
+        return new VBox(b, status);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────────────────────
+
+    private void refresh() {
+        refreshRows();
+        opsLabel.setText("Operations: " + OperationCounter.getOperations());
+        if (showTree.isSelected() || showLazy.isSelected())
+            refreshAdvanced();
+    }
+
+    private void refreshRows() {
+        long[] a = tree.getOriginalArray();
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < values.length; i++) {
-            sb.append(String.format("Row %d  →  %d tickets%n", i, values[i]));
-        }
-        rowDisplay.setText(sb.toString());
+        for (int i = 0; i < a.length; i++)
+            sb.append("Row ").append(i).append(" → ").append(a[i]).append("\n");
+        rows.setText(sb.toString());
     }
 
-    /**
-     * Rebuild the advanced display based on which checkboxes are ticked.
-     *
-     * "Show Internal Tree Structure" → tree[] nodes (non-zero, 1-indexed)
-     * "Show Lazy Propagation State"  → lazy[] nodes where lazy[i] != 0 only
-     */
-    private void refreshAdvancedDisplay() {
-        if (!showTreeCheckBox.isSelected() && !showLazyCheckBox.isSelected()) {
-            advancedDisplay.setText("");
-            return;
-        }
-
+    private void refreshAdvanced() {
         StringBuilder sb = new StringBuilder();
 
-        if (showTreeCheckBox.isSelected()) {
-            long[] tree = segmentTree.getTreeArray();
-            sb.append("── Internal Tree Nodes ──────────────────────────────\n");
-            sb.append("(Each node stores the sum of its segment.)\n\n");
-            for (int i = 1; i < tree.length; i++) {
-                if (tree[i] != 0) {
-                    sb.append(String.format("Node %2d  →  %d%n", i, tree[i]));
-                }
-            }
-            if (showLazyCheckBox.isSelected()) sb.append("\n");
+        if (showTree.isSelected()) {
+            sb.append("TREE\n");
+            long[] t = tree.getTreeArray();
+            for (int i = 1; i < t.length; i++)
+                if (t[i] != 0) sb.append(i).append(": ").append(t[i]).append("\n");
         }
 
-        if (showLazyCheckBox.isSelected()) {
-            long[] lazy = segmentTree.getLazyArray();
-            sb.append("── Lazy Propagation State ───────────────────────────\n");
-            sb.append("(Non-zero = pending update not yet pushed to children.)\n\n");
-            boolean anyPending = false;
-            for (int i = 1; i < lazy.length; i++) {
-                if (lazy[i] != 0) {
-                    sb.append(String.format("Lazy Node %2d  →  +%d%n", i, lazy[i]));
-                    anyPending = true;
-                }
-            }
-            if (!anyPending) {
-                sb.append("(All nodes clean — no pending lazy values.)\n");
-            }
+        if (showLazy.isSelected()) {
+            sb.append("\nLAZY\n");
+            long[] l = tree.getLazyArray();
+            for (int i = 1; i < l.length; i++)
+                if (l[i] != 0) sb.append(i).append(": ").append(l[i]).append("\n");
         }
 
-        advancedDisplay.setText(sb.toString());
+        advanced.setText(sb.toString());
+        advanced.setVisible(true);
+        advanced.setManaged(true);
     }
 
-    /** Show or hide the advanced TextArea based on checkbox state. */
-    private void syncAdvancedVisibility() {
-        boolean show = showTreeCheckBox.isSelected() || showLazyCheckBox.isSelected();
-        advancedDisplay.setVisible(show);
-        advancedDisplay.setManaged(show);
-        if (show) refreshAdvancedDisplay();
+    // ─────────────────────────────────────────────────────────────
+    // SMALL FACTORY HELPERS
+    // ─────────────────────────────────────────────────────────────
+
+    private ComboBox<Integer> boxIndex() {
+        ComboBox<Integer> c = new ComboBox<>();
+        for (int i = 0; i < INITIAL.length; i++) c.getItems().add(i);
+        c.setValue(0);
+        return c;
     }
 
-    // ── Factory helper ────────────────────────────────────────────────────────
+    private VBox box(String title, Control c) {
+        return new VBox(new Label(title), c);
+    }
 
-    /** ComboBox pre-loaded with indices 0 – 7 (one per cinema row). */
-    private ComboBox<Integer> makeIndexCombo() {
-        ComboBox<Integer> cb = new ComboBox<>();
-        for (int i = 0; i < INITIAL_TICKETS.length; i++) cb.getItems().add(i);
-        cb.setValue(0);
-        return cb;
+    private VBox row(String title, String l1, Control c1,
+                     String l2, Control c2, Control btn) {
+        HBox h = new HBox(8,
+                new Label(l1), c1,
+                new Label(l2), c2,
+                btn);
+        h.setAlignment(Pos.CENTER_LEFT);
+        return new VBox(new Label(title), h);
+    }
+
+    private VBox row(String title, String l1, Control c1,
+                     String l2, Control c2,
+                     String l3, Control c3, Control btn) {
+
+        HBox h = new HBox(8,
+                new Label(l1), c1,
+                new Label(l2), c2,
+                new Label(l3), c3,
+                btn);
+        h.setAlignment(Pos.CENTER_LEFT);
+
+        return new VBox(new Label(title), h);
     }
 }
