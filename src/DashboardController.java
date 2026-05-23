@@ -66,6 +66,8 @@ public class DashboardController {
                 new Separator(),
                 advancedSection(),
                 new Separator(),
+                printTreeSection(),     // NEW
+                new Separator(),
                 benchmarkSection()
         );
 
@@ -162,7 +164,7 @@ public class DashboardController {
     private VBox advancedSection() {
 
         showTree = new CheckBox("Segment Tree");
-        showLazy = new CheckBox("Lazy Segment Tree");
+        showLazy = new CheckBox("Lazy Array");
 
         advanced = new TextArea();
         advanced.setEditable(false);
@@ -170,15 +172,27 @@ public class DashboardController {
         advanced.setVisible(false);
         advanced.setManaged(false);
 
-        showTree.setOnAction(e -> refreshAdvanced());
-        showLazy.setOnAction(e -> refreshAdvanced());
+        showTree.setOnAction(e -> syncVisibility());
+        showLazy.setOnAction(e -> syncVisibility());
 
-        VBox box = new VBox(
+        return new VBox(
                 new HBox(10, showTree, showLazy),
                 advanced
         );
 
-        return box;
+    }
+
+     // NEW — prints tree structure and lazy state to the console
+    private VBox printTreeSection() {
+        Button b = new Button("Print Tree");
+        b.setOnAction(e -> {
+            System.out.println("\n TREE SNAPSHOT ");
+            Visualizer.printTree(
+                    tree.getTreeArray(),
+                    tree.size(),
+                    "Lazy Segment Tree - current state");
+        });
+        return new VBox(b);
     }
 
     private VBox benchmarkSection() {
@@ -239,8 +253,13 @@ public class DashboardController {
         }
 
         advanced.setText(sb.toString());
-        advanced.setVisible(true);
-        advanced.setManaged(true);
+    }
+
+    private void syncVisibility() {
+        boolean show = showTree.isSelected() || showLazy.isSelected();
+        advanced.setVisible(show);
+        advanced.setManaged(show);
+        if (show) refreshAdvanced();
     }
 
     // ─────────────────────────────────────────────────────────────
